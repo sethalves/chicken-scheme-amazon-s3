@@ -72,27 +72,30 @@
 (define *last-sig* #f)
 (define amazon-ns (make-parameter '(x . "http://s3.amazonaws.com/doc/2006-03-01/")))
 
-(define (aws-headers bucket path verb content-type content-length)
+(define (aws-headers bucket path verb content-type content-length acl)
   (let ((n (current-date 0)))
-    (headers `((date #(,(intarweb-date n) ()))
-               (authorization #(aws ((access-key . ,(access-key))
-                                     (signed-secret .
-                                                    ,(make-aws-authorization
-                                                      verb
-                                                      (string-append "/"
-                                                                     (if bucket (string-append bucket "/") "")
-                                                                     (if path path ""))
-                                                      date: (sig-date n)
-                                                      content-type: content-type)))))
-               (content-type ,(string->symbol content-type))
-               (content-length ,content-length)))))
+    (let-values (((hmac-sha1 can-string)
+                  (make-aws-authorization
+                   verb
+                   (string-append "/"
+                                  (if bucket (string-append bucket "/") "")
+                                  (if path path ""))
+                   date: (sig-date n)
+                   content-type: content-type
+                   amz-headers: (if acl (list (cons "X-Amz-Acl" acl)) '()))))
+      (headers `((date #(,(intarweb-date n) ()))
+                 (authorization #(aws ((access-key . ,(access-key))
+                                       (signed-secret . ,hmac-sha1))))
+                 ,@(if acl `((x-amz-acl ,acl)) '())
+                 (content-type ,(string->symbol content-type))
+                 (content-length ,content-length))))))
 
-(define (aws-request bucket path verb #!key no-auth (content-type "") (content-length 0))
+(define (aws-request bucket path verb #!key no-auth (content-type "") (content-length 0) (acl #f))
   (make-request
    method: (string->symbol verb)
    uri: (uri-reference (string-append "http" (if (https) "s" "") "://" (if bucket (string-append bucket ".") "")
                                       "s3.amazonaws.com" (if path (string-append "/" path) "")))
-   headers: (if no-auth (headers '()) (aws-headers bucket path verb content-type content-length))))
+   headers: (if no-auth (headers '()) (aws-headers bucket path verb content-type content-length acl))))
 
 (define (aws-xml-parser path ns)
   (lambda () 
@@ -182,19 +185,25 @@
 (define (list-objects bucket)
   (perform-aws-request bucket: bucket sxpath: '(x:ListBucketResult x:Contents x:Key *text*)))
 
-(define (put-object! bucket key object-thunk object-length object-type)
-  (perform-aws-request bucket: bucket path: key verb: "PUT" content-type: object-type body: object-thunk
-                       content-length: object-length no-xml: #t))
+(define (put-object! bucket key object-thunk object-length object-type
+                     #!key (acl #f))
+  (perform-aws-request bucket: bucket path: key verb: "PUT"
+                       content-type: object-type body: object-thunk
+                       content-length: object-length no-xml: #t acl: acl))
 
-(define (put-string! bucket key string)
-  (put-object! bucket key (lambda () (display string)) (string-length string) "text/plain"))
+(define (put-string! bucket key string #!key (acl #f))
+  (put-object! bucket key
+               (lambda () (display string)) (string-length string)
+               "text/plain" acl: acl))
 
-(define (put-sexp! bucket key sexp)
-  (let-values (((res request-uri response) (put-string! bucket key (->string sexp))))
+(define (put-sexp! bucket key sexp #!key (acl #f))
+  (let-values (((res request-uri response)
+                (put-string! bucket key (->string sexp) acl: acl)))
     (values res request-uri response)))
 
-(define (put-file! bucket key file-path)
-  (put-object! bucket key (read-byte-file file-path) (file-size file-path) "binary/octet-stream"))
+(define (put-file! bucket key file-path #!key (acl #f))
+  (put-object! bucket key (read-byte-file file-path)
+               (file-size file-path) "binary/octet-stream" acl: acl))
 
 (define (get-object bucket key)
   (perform-aws-request bucket: bucket path: key no-xml: #t))

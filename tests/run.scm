@@ -2,7 +2,7 @@
 ; email: t@thintz.com
 ; license: bsd
 
-(use test srfi-1 amazon-s3)
+(use test amazon-s3)
 
 (define *b* "chicken-scheme-test-bucket-1")
 (access-key "AKIAJS2UGBOTG36AKH3A")

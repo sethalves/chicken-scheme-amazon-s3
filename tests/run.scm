@@ -5,16 +5,17 @@
 (use test srfi-1 amazon-s3)
 
 (define *b* "chicken-scheme-test-bucket-1")
-(access-key "0HNFP4ARQG1650R95982")
-(secret-key "1KCyTEv41zt2pKyjaUK9RxfUJzs87yBFNTj5liu9")
-
+(access-key "AKIAJS2UGBOTG36AKH3A")
+(secret-key "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")
 
 (test-group
  "Amazon S3"
  (test "Bucket Exists 1" #f (bucket-exists? *b*))
  (test-assert "Create Bucket" (create-bucket! *b*))
  (test "Bucket Exists 2" #t (bucket-exists? *b*))
- (test-assert "List Buckets" (list-buckets)) ; should test this more speci
+ ;; the credentials are limited to "arn:aws:s3:::chicken-scheme-test-bucket-1"
+ ;; so listing all buckets on the account wont work.
+ ;; (test-assert "List Buckets" (list-buckets)) ; should test this more speci
  (test "List Bucket Objects 1" '() (list-objects *b*))
  (test-assert "Put Object" (put-object! *b* "key" (lambda () (display "value")) (string-length "value") "text/plain"))
  (test "List Bucket Objects 2" '("key") (list-objects *b*))
@@ -35,3 +36,32 @@
  (test-assert "Delete Bucket" (delete-bucket! *b*)))
 
 (test-exit)
+
+
+;; aws credentials needed to run this test:
+;; {
+;;   "Version": "2012-10-17",
+;;   "Statement": [
+;;     {
+;;       "Sid": "Stmt1391630304000",
+;;       "Effect": "Allow",
+;;       "Action": [
+;;         "s3:CreateBucket",
+;;         "s3:DeleteBucket",
+;;         "s3:DeleteObject",
+;;         "s3:GetObject",
+;;         "s3:ListAllMyBuckets",
+;;         "s3:ListBucket",
+;;         "s3:PutObject",
+;;         "s3:PutObjectAcl"
+;;       ],
+;;       "Resource": [
+;;         "arn:aws:s3:::chicken-scheme-test-bucket-1",
+;;         "arn:aws:s3:::chicken-scheme-test-bucket-1/key",
+;;         "arn:aws:s3:::chicken-scheme-test-bucket-1/string",
+;;         "arn:aws:s3:::chicken-scheme-test-bucket-1/sexp",
+;;         "arn:aws:s3:::chicken-scheme-test-bucket-1/file"
+;;       ]
+;;     }
+;;   ]
+;; }

@@ -180,7 +180,8 @@
   (perform-aws-request bucket: bucket verb: "PUT" no-xml: #t))
 
 (define (delete-bucket! bucket)
-  (perform-aws-request bucket: bucket verb: "DELETE" no-xml: #t))
+  (perform-aws-request bucket: bucket verb: "DELETE" no-xml: #t)
+  #t)
 
 (define (list-objects bucket)
   (perform-aws-request bucket: bucket sxpath: '(x:ListBucketResult x:Contents x:Key *text*)))
@@ -219,6 +220,7 @@
   (perform-aws-request bucket: bucket path: key no-xml: #t reader-thunk: (write-byte-file file-path)))
 
 (define (delete-object! bucket key)
-  (perform-aws-request bucket: bucket path: key no-xml: #t verb: "DELETE"))
+  (perform-aws-request bucket: bucket path: key no-xml: #t verb: "DELETE")
+  #t)
 
 )

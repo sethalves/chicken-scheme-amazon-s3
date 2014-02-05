@@ -12,4 +12,5 @@
 (test-depends test srfi-1)
 
 (author "Thomas Hintz")
+(maintainer "Seth Alves")
 (synopsis "Provides an interface to the Amazon S3 service."))

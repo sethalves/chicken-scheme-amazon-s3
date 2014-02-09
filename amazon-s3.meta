@@ -9,7 +9,7 @@
 
 (needs base64 sha1 http-client uri-common intarweb srfi-19 hmac ssax sxpath)
 
-(test-depends test srfi-1)
+(test-depends test)
 
 (author "Thomas Hintz")
 (maintainer "Seth Alves")

@@ -3,10 +3,13 @@
 ; license: bsd
 
 (use test amazon-s3)
+(use http-client)
 
 (define *b* "chicken-scheme-test-bucket-1")
 (access-key "AKIAJS2UGBOTG36AKH3A")
 (secret-key "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")
+
+(define got-403 #f)
 
 (test-group
  "Amazon S3"
@@ -31,9 +34,31 @@
        (string=?
         (with-input-from-file "file" (lambda () (read-string)))
         (with-input-from-file "test-out-file" (lambda () (read-string)))))
- (test-assert "Delete Object 3" (delete-object! *b* "sexp"))
- (test-assert "Delete Object 4" (delete-object! *b* "file"))
- (test-assert "Delete Bucket" (delete-bucket! *b*)))
+
+
+ ;; test acl
+ (test-assert "Acl Put String" (put-string! *b* "string" "res-string"))
+ (with-exception-handler
+  (lambda (x) (set! got-403 #t))
+  (lambda ()
+    (with-input-from-request
+     "https://s3.amazonaws.com/chicken-scheme-test-bucket-1/string"
+     #f (lambda () #t))))
+ (test-assert got-403)
+ (test-assert "Delete Object 3" (delete-object! *b* "string"))
+ (test-assert "Acl Put String"
+              (put-string! *b* "string" "res-string" acl: 'public-read))
+ (with-input-from-request
+  "https://s3.amazonaws.com/chicken-scheme-test-bucket-1/string"
+  #f (lambda () #t))
+ (test-assert "Delete Object 4" (delete-object! *b* "string"))
+
+ (test-assert "Delete Object 5" (delete-object! *b* "sexp"))
+ (test-assert "Delete Object 6" (delete-object! *b* "file"))
+ (test-assert "Delete Bucket" (delete-bucket! *b*))
+
+ )
+
 
 (test-exit)
 
@@ -51,7 +76,8 @@
 ;;         "s3:DeleteObject",
 ;;         "s3:GetObject",
 ;;         "s3:ListBucket",
-;;         "s3:PutObject"
+;;         "s3:PutObject",
+;;         "s3:PutObjectAcl"
 ;;       ],
 ;;       "Resource": [
 ;;         "arn:aws:s3:::chicken-scheme-test-bucket-1",

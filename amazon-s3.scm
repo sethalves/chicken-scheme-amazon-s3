@@ -1,5 +1,5 @@
-; author: Thomas Hintz
-; email: t@thintz.com
+; author: Thomas Hintz <t@thintz.com>
+; maintainer: Seth Alves <seth@hungry.com>
 ; license: bsd
 
 (module amazon-s3
@@ -10,8 +10,19 @@
    access-key secret-key https
 
    ;; procs
-   list-objects list-buckets bucket-exists? create-bucket! delete-bucket! get-object put-object! delete-object!
-   put-string! put-sexp! put-file! get-string get-sexp get-file
+   list-objects
+   list-buckets
+   bucket-exists?
+   create-bucket!
+   delete-bucket!
+   get-object
+   put-object!
+   delete-object!
+   put-string!
+   put-sexp!
+   put-file!
+   get-string
+   get-sexp get-file
 
    ;; macros
    with-bucket)
@@ -29,7 +40,8 @@
 
 ;;; params
 
-(define (intarweb-date date) (string->time (date->string date "~a ~b ~d ~T ~Y GMT")))
+(define (intarweb-date date)
+  (string->time (date->string date "~a ~b ~d ~T ~Y GMT")))
 (define (sig-date date) (date->string date "~a, ~d ~b ~Y ~T GMT"))
 
 (define access-key (make-parameter ""))
@@ -44,33 +56,39 @@
        #f
        (abort exn)))
 
-(define (make-aws-authorization verb resource #!key (date #f) (amz-headers '()) (content-md5 #f) (content-type #f))
-  (let* ((can-amz-headers (sort (map (lambda (header)
-                                       `(,(string-downcase (car header)) . ,(cdr header)))
-                                     amz-headers)
-                                (lambda (v1 v2)
-                                  (string<? (car v1) (car v2)))))
-         (can-string (with-output-to-string
-                       (lambda ()
-                         (display (string-upcase verb))
-                         (newline)
-                         (if content-md5 (display content-md5) (display ""))
-                         (newline)
-                         (if content-type (display content-type) (display ""))
-                         (newline)
-                         (if date (display date) (display ""))
-                         (newline)
-                         (display (fold (lambda (e o)
-					  (string-append o (sprintf "~a:~a~%" (car e) (cdr e))))
-					""
-					can-amz-headers))
-                         (display resource))))
-	 (hmac-sha1 (base64-encode ((hmac (secret-key) (sha1-primitive)) can-string))))
+(define (make-aws-authorization verb resource
+                                #!key
+                                (date #f)
+                                (amz-headers '())
+                                (content-md5 #f)
+                                (content-type #f))
+  (let* ((can-amz-headers
+          (sort (map (lambda (header)
+                       `(,(string-downcase (car header)) . ,(cdr header)))
+                     amz-headers)
+                (lambda (v1 v2)
+                  (string<? (car v1) (car v2)))))
+         (can-string
+          (string-append
+           (string-upcase verb) "\n"
+           (if content-md5 content-md5 "") "\n"
+           (if content-type content-type "") "\n"
+           (if date date "") "\n"
+           (fold (lambda (e o)
+                   (string-append o (sprintf "~a:~a~%" (car e) (cdr e))))
+                 ""
+                 can-amz-headers)
+           resource))
+         (hmac-sha1 (base64-encode
+                     ((hmac (secret-key) (sha1-primitive)) can-string))))
     (set! *last-sig* can-string)
     (values hmac-sha1 can-string)))
 
+
 (define *last-sig* #f)
-(define amazon-ns (make-parameter '(x . "http://s3.amazonaws.com/doc/2006-03-01/")))
+(define amazon-ns
+  (make-parameter '(x . "http://s3.amazonaws.com/doc/2006-03-01/")))
+
 
 (define (aws-headers bucket path verb content-type content-length acl)
   (let ((n (current-date 0)))
@@ -90,68 +108,87 @@
                  (content-type ,(string->symbol content-type))
                  (content-length ,content-length))))))
 
-(define (aws-request bucket path verb #!key no-auth (content-type "") (content-length 0) (acl #f))
+
+(define (aws-request bucket path verb
+                     #!key
+                     no-auth
+                     (content-type "")
+                     (content-length 0)
+                     (acl #f))
   (make-request
    method: (string->symbol verb)
-   uri: (uri-reference (string-append "http" (if (https) "s" "") "://" (if bucket (string-append bucket ".") "")
-                                      "s3.amazonaws.com" (if path (string-append "/" path) "")))
-   headers: (if no-auth (headers '()) (aws-headers bucket path verb content-type content-length acl))))
+   uri: (uri-reference
+         (string-append
+          "http" (if (https) "s" "") "://"
+          (if bucket (string-append bucket ".") "")
+          "s3.amazonaws.com" (if path (string-append "/" path) "")))
+   headers: (if no-auth (headers '())
+                (aws-headers bucket path verb
+                             content-type content-length acl))))
+
 
 (define (aws-xml-parser path ns)
-  (lambda () 
+  (lambda ()
      ((sxpath path)
       (ssax:xml->sxml (current-input-port) ns))))
 
-(define (perform-aws-request #!key
-                             (bucket #f)
-                             (path #f)
-                             (sxpath '())
-                             (body "")
-                             (verb "GET")
-                             (ns '((x . "http://s3.amazonaws.com/doc/2006-03-01/")))
-                             (no-xml #f)
-                             (no-auth #f)
-			     (reader-thunk read-string)
-                             (content-type "application/x-www-form-urlencoded")
-                             (content-length 0))
+(define (perform-aws-request
+         #!key
+         (bucket #f)
+         (path #f)
+         (sxpath '())
+         (body "")
+         (verb "GET")
+         (ns '((x . "http://s3.amazonaws.com/doc/2006-03-01/")))
+         (no-xml #f)
+         (no-auth #f)
+         (reader-thunk read-string)
+         (content-type "application/x-www-form-urlencoded")
+         (content-length 0)
+         (acl #f))
   (with-input-from-request
-   (aws-request bucket path verb no-auth: no-auth content-type: content-type content-length: content-length)
+   (aws-request bucket path verb no-auth: no-auth
+                content-type: content-type content-length: content-length
+                acl: acl)
    body
    (if no-xml
        reader-thunk
        (aws-xml-parser sxpath ns))))
 
+
 (define (read-byte-file path . port)
   (lambda ()
     (let ((file (open-input-file path)))
       (letrec ((read-next
-		(lambda ()
-		  (let ((b (read-byte file)))
-		    (if (eof-object? b)
-			#t
-			(begin 
-			  (if (> (length port) 0)
-			      (write-byte b (car port))
-			      (write-byte b))
-			  (read-next)))))))
-	(read-next))
+                (lambda ()
+                  (let ((b (read-byte file)))
+                    (if (eof-object? b)
+                        #t
+                        (begin
+                          (if (> (length port) 0)
+                              (write-byte b (car port))
+                              (write-byte b))
+                          (read-next)))))))
+        (read-next))
       (close-input-port file))))
+
 
 (define (write-byte-file path . port)
   (lambda ()
     (let ((file (open-output-file path)))
       (letrec ((read-next
-		(lambda ()
-		  (let ((b (if (> (length port) 0)
-			       (read-byte (car port))
-			       (read-byte))))
-		    (if (eof-object? b)
-			#t
-			(begin 
-			  (write-byte b file)
-			  (read-next)))))))
-	(read-next))
+                (lambda ()
+                  (let ((b (if (> (length port) 0)
+                               (read-byte (car port))
+                               (read-byte))))
+                    (if (eof-object? b)
+                        #t
+                        (begin 
+                          (write-byte b file)
+                          (read-next)))))))
+        (read-next))
       (close-output-port file))))
+
 
 ;;; api
 
@@ -166,8 +203,11 @@
      (begin (with-bucket bucket exp)
             (with-bucket bucket body ...)))))
 
+
 (define (list-buckets)
-  (perform-aws-request sxpath: '(x:ListAllMyBucketsResult x:Buckets x:Bucket x:Name *text*)))
+  (perform-aws-request
+   sxpath: '(x:ListAllMyBucketsResult x:Buckets x:Bucket x:Name *text*)))
+
 
 (define (bucket-exists? bucket)
   (handle-exceptions
@@ -176,15 +216,20 @@
    (perform-aws-request bucket: bucket verb: "HEAD" no-xml: #t)
    #t))
 
+
 (define (create-bucket! bucket)
   (perform-aws-request bucket: bucket verb: "PUT" no-xml: #t))
+
 
 (define (delete-bucket! bucket)
   (perform-aws-request bucket: bucket verb: "DELETE" no-xml: #t)
   #t)
 
+
 (define (list-objects bucket)
-  (perform-aws-request bucket: bucket sxpath: '(x:ListBucketResult x:Contents x:Key *text*)))
+  (perform-aws-request
+   bucket: bucket sxpath: '(x:ListBucketResult x:Contents x:Key *text*)))
+
 
 (define (put-object! bucket key object-thunk object-length object-type
                      #!key (acl #f))
@@ -192,32 +237,42 @@
                        content-type: object-type body: object-thunk
                        content-length: object-length no-xml: #t acl: acl))
 
+
 (define (put-string! bucket key string #!key (acl #f))
   (put-object! bucket key
                (lambda () (display string)) (string-length string)
                "text/plain" acl: acl))
+
 
 (define (put-sexp! bucket key sexp #!key (acl #f))
   (let-values (((res request-uri response)
                 (put-string! bucket key (->string sexp) acl: acl)))
     (values res request-uri response)))
 
+
 (define (put-file! bucket key file-path #!key (acl #f))
   (put-object! bucket key (read-byte-file file-path)
                (file-size file-path) "binary/octet-stream" acl: acl))
 
+
 (define (get-object bucket key)
   (perform-aws-request bucket: bucket path: key no-xml: #t))
+
 
 (define (get-string bucket key)
   (perform-aws-request bucket: bucket path: key no-xml: #t))
 
+
 (define (get-sexp bucket key)
   (let-values (((string request-uri response) (get-string bucket key)))
-               (values (call-with-input-string string read) request-uri response)))
+    (values (call-with-input-string string read) request-uri response)))
+
 
 (define (get-file bucket key file-path)
-  (perform-aws-request bucket: bucket path: key no-xml: #t reader-thunk: (write-byte-file file-path)))
+  (perform-aws-request
+   bucket: bucket path: key no-xml: #t
+   reader-thunk: (write-byte-file file-path)))
+
 
 (define (delete-object! bucket key)
   (perform-aws-request bucket: bucket path: key no-xml: #t verb: "DELETE")

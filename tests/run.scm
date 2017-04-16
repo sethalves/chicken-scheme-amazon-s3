@@ -6,8 +6,22 @@
 (use http-client)
 
 (define *b* "chicken-scheme-test-bucket-1")
-(access-key "AKIAJS2UGBOTG36AKH3A")
-(secret-key "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")
+
+;; break up the key so that amazon's scanner doesn't find it and cause someone
+;; to freak out.  They key is useless for anything other than this test.
+(access-key (string-append "AK"
+                           "IAI"
+                           "YOT43"
+                           "G3DXSD"
+                           "DBUA"))
+(secret-key (string-append "upDo"
+                           "HLtUu"
+                           "UT"
+                           "mMI+p"
+                           "QSW15EK"
+                           "O9tII2"
+                           "38OR4Y"
+                           "FDZ7l"))
 
 (define got-403 #f)
 

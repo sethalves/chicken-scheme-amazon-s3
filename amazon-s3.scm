@@ -41,7 +41,7 @@
 ;;; params
 
 (define (intarweb-date date)
-  (string->time (date->string date "~a ~b ~d ~T ~Y GMT")))
+  (string->time (date->string date "~a ~b ~d ~T ~Y GMT") "%a %b %d %T %Y %Z"))
 (define (sig-date date) (date->string date "~a, ~d ~b ~Y ~T GMT"))
 
 (define access-key (make-parameter ""))

@@ -38,12 +38,10 @@
 
  ;; test acl
  (test-assert "Acl Put String" (put-string! *b* "string" "res-string"))
- (with-exception-handler
-  (lambda (x) (set! got-403 #t))
-  (lambda ()
-    (with-input-from-request
-     "https://s3.amazonaws.com/chicken-scheme-test-bucket-1/string"
-     #f (lambda () #t))))
+ (handle-exceptions x (set! got-403 #t)
+   (with-input-from-request
+    "https://s3.amazonaws.com/chicken-scheme-test-bucket-1/string"
+    #f (lambda () #t)))
  (test-assert got-403)
  (test-assert "Delete Object 3" (delete-object! *b* "string"))
  (test-assert "Acl Put String"

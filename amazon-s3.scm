@@ -7,7 +7,7 @@
    *last-sig*
 
    ;; params
-   access-key secret-key https
+   access-key secret-key https s3-base-host
 
    ;; procs
    list-objects
@@ -31,12 +31,24 @@
 (use base64 sha1 http-client uri-common intarweb srfi-19 hmac ssax sxpath)
 
 ; needed to make intarweb work with Amazon's screwy authorization header
-(define (aws-param-subunparser params)
- (sprintf "~A:~A" (alist-ref 'access-key params)
-                  (alist-ref 'signed-secret params)))
+(define authorization-unparser
+  (alist-ref 'authorization (header-unparsers)))
 
-(authorization-param-subunparsers
- `((aws . ,aws-param-subunparser) . ,(authorization-param-subunparsers)))
+(define (aws-authorization-unparser header-contents)
+  (map (lambda (header)
+         (if (eq? (get-value header) 'aws)
+             (let ((params (get-params header)))
+               ;; Some servers (Ceph) insist on the "AWS" auth-scheme
+               ;; being all caps even though the framework laid out by
+               ;; RFC2617 says it's supposed to be case insensitive!
+               (sprintf "AWS ~A:~A"
+                 (alist-ref 'access-key params)
+                 (alist-ref 'signed-secret params)))
+             (authorization-unparser (list header))))
+       header-contents))
+
+(header-unparsers
+ `((authorization . ,aws-authorization-unparser) . ,(header-unparsers)))
 
 ;;; params
 
@@ -47,6 +59,7 @@
 (define access-key (make-parameter ""))
 (define secret-key (make-parameter ""))
 (define https (make-parameter #f))
+(define s3-base-host (make-parameter "s3.amazonaws.com"))
 
 ;;; helper methods
 
@@ -97,7 +110,7 @@
                    verb
                    (string-append "/"
                                   (if bucket (string-append bucket "/") "")
-                                  (if path path ""))
+                                  (or path ""))
                    date: (sig-date n)
                    content-type: content-type
                    amz-headers: (if acl (list (cons "X-Amz-Acl" acl)) '()))))
@@ -115,16 +128,24 @@
                      (content-type "")
                      (content-length 0)
                      (acl #f))
-  (make-request
-   method: (string->symbol verb)
-   uri: (uri-reference
-         (string-append
-          "http" (if (https) "s" "") "://"
-          (if bucket (string-append bucket ".") "")
-          "s3.amazonaws.com" (if path (string-append "/" path) "")))
-   headers: (if no-auth (headers '())
-                (aws-headers bucket path verb
-                             content-type content-length acl))))
+  (let* ((host (if bucket
+                   (string-append bucket "." (s3-base-host))
+                   (s3-base-host)))
+         (base (make-uri scheme: (if (https) 'https 'http) host: host))
+         ;; We parse the path as URI, then ensuring it is an absolute
+         ;; path.  This is far from ideal, but it works.
+         (path-ref (uri-reference path))
+         (abs-path (and path-ref
+                        (if (uri-path-absolute? path-ref)
+                            (uri-path path-ref)
+                            `(/ ,@(uri-path path-ref)))))
+         (final-uri (update-uri base path: abs-path)))
+    (make-request
+     method: (string->symbol verb)
+     uri: final-uri
+     headers: (if no-auth (headers '())
+                  (aws-headers bucket path verb
+                               content-type content-length acl)))))
 
 
 (define (aws-xml-parser path ns)

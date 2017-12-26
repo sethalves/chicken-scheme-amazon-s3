@@ -15,6 +15,7 @@
    bucket-exists?
    create-bucket!
    delete-bucket!
+   object-exists?
    get-object
    put-object!
    delete-object!
@@ -250,6 +251,14 @@
 (define (list-objects bucket)
   (perform-aws-request
    bucket: bucket sxpath: '(x:ListBucketResult x:Contents x:Key *text*)))
+
+
+(define (object-exists? bucket key)
+  (handle-exceptions
+   exn
+   (assert-404 exn)
+   (perform-aws-request bucket: bucket path: key verb: "HEAD" no-xml: #t)
+   #t))
 
 
 (define (put-object! bucket key object-thunk object-length object-type

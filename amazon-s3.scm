@@ -123,7 +123,7 @@
                  (content-length ,content-length))))))
 
 
-(define (aws-request bucket path verb
+(define (aws-request bucket path verb query
                      #!key
                      no-auth
                      (content-type "")
@@ -140,7 +140,8 @@
                         (if (uri-path-absolute? path-ref)
                             (uri-path path-ref)
                             `(/ ,@(uri-path path-ref)))))
-         (final-uri (update-uri base path: abs-path)))
+         ;; Add path and query
+         (final-uri (update-uri base path: abs-path query: query)))
     (make-request
      method: (string->symbol verb)
      uri: final-uri
@@ -158,6 +159,7 @@
          #!key
          (bucket #f)
          (path #f)
+         (query #f)
          (sxpath '())
          (body "")
          (verb "GET")
@@ -169,7 +171,7 @@
          (content-length 0)
          (acl #f))
   (with-input-from-request
-   (aws-request bucket path verb no-auth: no-auth
+   (aws-request bucket path verb query no-auth: no-auth
                 content-type: content-type content-length: content-length
                 acl: acl)
    body
@@ -248,9 +250,14 @@
   #t)
 
 
-(define (list-objects bucket)
+(define (list-objects bucket #!key prefix)
+  ;; TODO: Somehow(?) handle "IsTruncated" results and add support for
+  ;; "marker" so one can page through the results.  Possibly this can
+  ;; return a generator procedure or accept a callback to handle the
+  ;; listing.
   (perform-aws-request
-   bucket: bucket sxpath: '(x:ListBucketResult x:Contents x:Key *text*)))
+   bucket: bucket query: `((prefix . ,prefix))
+   sxpath: '(x:ListBucketResult x:Contents x:Key *text*)))
 
 
 (define (object-exists? bucket key)

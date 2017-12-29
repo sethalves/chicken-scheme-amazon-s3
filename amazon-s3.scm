@@ -7,7 +7,7 @@
    *last-sig*
 
    ;; params
-   access-key secret-key https
+   access-key secret-key https s3-base-host
 
    ;; procs
    list-objects
@@ -15,6 +15,7 @@
    bucket-exists?
    create-bucket!
    delete-bucket!
+   object-exists?
    get-object
    put-object!
    delete-object!
@@ -31,12 +32,24 @@
 (use base64 sha1 http-client uri-common intarweb srfi-19 hmac ssax sxpath)
 
 ; needed to make intarweb work with Amazon's screwy authorization header
-(define (aws-param-subunparser params)
- (sprintf "~A:~A" (alist-ref 'access-key params)
-                  (alist-ref 'signed-secret params)))
+(define authorization-unparser
+  (alist-ref 'authorization (header-unparsers)))
 
-(authorization-param-subunparsers
- `((aws . ,aws-param-subunparser) . ,(authorization-param-subunparsers)))
+(define (aws-authorization-unparser header-contents)
+  (map (lambda (header)
+         (if (eq? (get-value header) 'aws)
+             (let ((params (get-params header)))
+               ;; Some servers (Ceph) insist on the "AWS" auth-scheme
+               ;; being all caps even though the framework laid out by
+               ;; RFC2617 says it's supposed to be case insensitive!
+               (sprintf "AWS ~A:~A"
+                 (alist-ref 'access-key params)
+                 (alist-ref 'signed-secret params)))
+             (authorization-unparser (list header))))
+       header-contents))
+
+(header-unparsers
+ `((authorization . ,aws-authorization-unparser) . ,(header-unparsers)))
 
 ;;; params
 
@@ -47,6 +60,7 @@
 (define access-key (make-parameter ""))
 (define secret-key (make-parameter ""))
 (define https (make-parameter #f))
+(define s3-base-host (make-parameter "s3.amazonaws.com"))
 
 ;;; helper methods
 
@@ -97,7 +111,7 @@
                    verb
                    (string-append "/"
                                   (if bucket (string-append bucket "/") "")
-                                  (if path path ""))
+                                  (or path ""))
                    date: (sig-date n)
                    content-type: content-type
                    amz-headers: (if acl (list (cons "X-Amz-Acl" acl)) '()))))
@@ -109,22 +123,31 @@
                  (content-length ,content-length))))))
 
 
-(define (aws-request bucket path verb
+(define (aws-request bucket path verb query
                      #!key
                      no-auth
                      (content-type "")
                      (content-length 0)
                      (acl #f))
-  (make-request
-   method: (string->symbol verb)
-   uri: (uri-reference
-         (string-append
-          "http" (if (https) "s" "") "://"
-          (if bucket (string-append bucket ".") "")
-          "s3.amazonaws.com" (if path (string-append "/" path) "")))
-   headers: (if no-auth (headers '())
-                (aws-headers bucket path verb
-                             content-type content-length acl))))
+  (let* ((host (if bucket
+                   (string-append bucket "." (s3-base-host))
+                   (s3-base-host)))
+         (base (make-uri scheme: (if (https) 'https 'http) host: host))
+         ;; We parse the path as URI, then ensuring it is an absolute
+         ;; path.  This is far from ideal, but it works.
+         (path-ref (uri-reference path))
+         (abs-path (and path-ref
+                        (if (uri-path-absolute? path-ref)
+                            (uri-path path-ref)
+                            `(/ ,@(uri-path path-ref)))))
+         ;; Add path and query
+         (final-uri (update-uri base path: abs-path query: query)))
+    (make-request
+     method: (string->symbol verb)
+     uri: final-uri
+     headers: (if no-auth (headers '())
+                  (aws-headers bucket path verb
+                               content-type content-length acl)))))
 
 
 (define (aws-xml-parser path ns)
@@ -136,6 +159,7 @@
          #!key
          (bucket #f)
          (path #f)
+         (query #f)
          (sxpath '())
          (body "")
          (verb "GET")
@@ -147,7 +171,7 @@
          (content-length 0)
          (acl #f))
   (with-input-from-request
-   (aws-request bucket path verb no-auth: no-auth
+   (aws-request bucket path verb query no-auth: no-auth
                 content-type: content-type content-length: content-length
                 acl: acl)
    body
@@ -226,9 +250,22 @@
   #t)
 
 
-(define (list-objects bucket)
+(define (list-objects bucket #!key prefix)
+  ;; TODO: Somehow(?) handle "IsTruncated" results and add support for
+  ;; "marker" so one can page through the results.  Possibly this can
+  ;; return a generator procedure or accept a callback to handle the
+  ;; listing.
   (perform-aws-request
-   bucket: bucket sxpath: '(x:ListBucketResult x:Contents x:Key *text*)))
+   bucket: bucket query: `((prefix . ,prefix))
+   sxpath: '(x:ListBucketResult x:Contents x:Key *text*)))
+
+
+(define (object-exists? bucket key)
+  (handle-exceptions
+   exn
+   (assert-404 exn)
+   (perform-aws-request bucket: bucket path: key verb: "HEAD" no-xml: #t)
+   #t))
 
 
 (define (put-object! bucket key object-thunk object-length object-type

@@ -7,7 +7,7 @@
    *last-sig*
 
    ;; params
-   access-key secret-key https s3-base-host
+   access-key secret-key https make-base-uri
 
    ;; procs
    list-objects
@@ -59,8 +59,17 @@
 
 (define access-key (make-parameter ""))
 (define secret-key (make-parameter ""))
-(define https (make-parameter #f))
-(define s3-base-host (make-parameter "s3.amazonaws.com"))
+
+;; DEPRECATED
+(define https (make-parameter #t))
+
+(define make-base-uri
+  (make-parameter
+   (lambda (bucket)
+     (make-uri scheme: (if (https) 'https 'http)
+               host: (if bucket
+                         (string-append bucket "." "s3.amazonaws.com")
+                         "s3.amazonaws.com")))))
 
 ;;; helper methods
 
@@ -129,19 +138,10 @@
                      (content-type "")
                      (content-length 0)
                      (acl #f))
-  (let* ((host (if bucket
-                   (string-append bucket "." (s3-base-host))
-                   (s3-base-host)))
-         (base (make-uri scheme: (if (https) 'https 'http) host: host))
-         ;; We parse the path as URI, then ensuring it is an absolute
-         ;; path.  This is far from ideal, but it works.
+  (let* ((base ((make-base-uri) bucket))
          (path-ref (uri-reference path))
-         (abs-path (and path-ref
-                        (if (uri-path-absolute? path-ref)
-                            (uri-path path-ref)
-                            `(/ ,@(uri-path path-ref)))))
-         ;; Add path and query
-         (final-uri (update-uri base path: abs-path query: query)))
+         (uri/path (if path-ref (uri-relative-to path-ref base) base))
+         (final-uri (update-uri uri/path query: query)))
     (make-request
      method: (string->symbol verb)
      uri: final-uri

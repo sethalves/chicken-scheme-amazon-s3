@@ -283,7 +283,7 @@
 
 (define (put-sexp! bucket key sexp #!key (acl #f))
   (let-values (((res request-uri response)
-                (put-string! bucket key (->string sexp) acl: acl)))
+                (put-string! bucket key (sprintf "~S" sexp) acl: acl)))
     (values res request-uri response)))
 
 

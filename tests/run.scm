@@ -51,6 +51,12 @@
 
  (test-assert "Put Sexp" (put-sexp! *b* "sexp" '(+ 1 2 3)))
  (test "Get Sexp" 6 (eval (get-sexp *b* "sexp")))
+
+ ;; Regression test for storing (->string value), which would store the
+ ;; string itself rather than the string representation of the sexp.
+ (test-assert "Put Sexp string" (put-sexp! *b* "sexp" "(+ 1 2 3)"))
+ (test "Get Sexp string" "(+ 1 2 3)" (eval (get-sexp *b* "sexp")))
+
  (test-assert "Put File" (put-file! *b* "file" "file"))
  (test-assert "Get File" (get-file *b* "file" "test-out-file"))
  (test "Get/Put File 1" #t

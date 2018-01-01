@@ -118,9 +118,9 @@
     (let-values (((hmac-sha1 can-string)
                   (make-aws-authorization
                    verb
-                   (string-append "/"
-                                  (if bucket (string-append bucket "/") "")
-                                  (or path ""))
+                   (uri->string
+                    (make-uri path: `(/ ,@(if bucket (list bucket) '())
+                                        ,(or path ""))))
                    date: (sig-date n)
                    content-type: content-type
                    amz-headers: (if acl (list (cons "X-Amz-Acl" acl)) '()))))
@@ -139,7 +139,7 @@
                      (content-length 0)
                      (acl #f))
   (let* ((base ((make-base-uri) bucket))
-         (path-ref (uri-reference path))
+         (path-ref (and path (make-uri path: (list path))))
          (uri/path (if path-ref (uri-relative-to path-ref base) base))
          (final-uri (update-uri uri/path query: query)))
     (make-request

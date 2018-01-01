@@ -42,6 +42,13 @@
  (test "List Bucket Objects w/ prefix" '("key") (list-objects *b* prefix: "k"))
  (test-assert "Delete Object 1" (delete-object! *b* "key"))
  (test-assert "Delete Object 2" (delete-object! *b* "string"))
+
+ (test "Object key encoding" (put-string! *b* "//12%456%2F?78#9aB" "x"))
+ (test "List Bucket objects returns same key name"
+       '("//12%456%2F?78#9aB") (list-objects *b*))
+ (test-assert "Delete encoded object"
+              (delete-object! *b* "//12%456%2F?78#9aB"))
+
  (test-assert "Put Sexp" (put-sexp! *b* "sexp" '(+ 1 2 3)))
  (test "Get Sexp" 6 (eval (get-sexp *b* "sexp")))
  (test-assert "Put File" (put-file! *b* "file" "file"))

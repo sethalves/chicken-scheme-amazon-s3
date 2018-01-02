@@ -35,6 +35,9 @@
  ;; (test-assert "List Buckets" (list-buckets)) ; should test this more speci
  (test "List Bucket Objects 1" '() (list-objects *b*))
  (test-assert "Put Object" (put-object! *b* "key" (lambda () (display "value")) (string-length "value") "text/plain"))
+ (test "Get Object"
+       '(#\v #\a #\l #\u #\e)
+       (get-object *b* "key" (lambda () (string->list (read-string)))))
  (test "List Bucket Objects 2" '("key") (list-objects *b*))
  (test-assert "Put String" (put-string! *b* "string" "res-string"))
  (test "Get String" "res-string" (get-string *b* "string"))

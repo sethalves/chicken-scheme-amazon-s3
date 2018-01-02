@@ -292,8 +292,9 @@
                (file-size file-path) "binary/octet-stream" acl: acl))
 
 
-(define (get-object bucket key)
-  (perform-aws-request bucket: bucket path: key no-xml: #t))
+(define (get-object bucket key #!optional (reader read-string))
+  (perform-aws-request
+   bucket: bucket path: key no-xml: #t reader-thunk: reader))
 
 
 (define (get-string bucket key)

@@ -35,6 +35,9 @@
  ;; (test-assert "List Buckets" (list-buckets)) ; should test this more speci
  (test "List Bucket Objects 1" '() (list-objects *b*))
  (test-assert "Put Object" (put-object! *b* "key" (lambda () (display "value")) (string-length "value") "text/plain"))
+ (test "Get Object"
+       '(#\v #\a #\l #\u #\e)
+       (get-object *b* "key" (lambda () (string->list (read-string)))))
  (test "List Bucket Objects 2" '("key") (list-objects *b*))
  (test-assert "Put String" (put-string! *b* "string" "res-string"))
  (test "Get String" "res-string" (get-string *b* "string"))
@@ -42,8 +45,21 @@
  (test "List Bucket Objects w/ prefix" '("key") (list-objects *b* prefix: "k"))
  (test-assert "Delete Object 1" (delete-object! *b* "key"))
  (test-assert "Delete Object 2" (delete-object! *b* "string"))
+
+ (test "Object key encoding" (put-string! *b* "//12%456%2F?78#9aB" "x"))
+ (test "List Bucket objects returns same key name"
+       '("//12%456%2F?78#9aB") (list-objects *b*))
+ (test-assert "Delete encoded object"
+              (delete-object! *b* "//12%456%2F?78#9aB"))
+
  (test-assert "Put Sexp" (put-sexp! *b* "sexp" '(+ 1 2 3)))
  (test "Get Sexp" 6 (eval (get-sexp *b* "sexp")))
+
+ ;; Regression test for storing (->string value), which would store the
+ ;; string itself rather than the string representation of the sexp.
+ (test-assert "Put Sexp string" (put-sexp! *b* "sexp" "(+ 1 2 3)"))
+ (test "Get Sexp string" "(+ 1 2 3)" (eval (get-sexp *b* "sexp")))
+
  (test-assert "Put File" (put-file! *b* "file" "file"))
  (test-assert "Get File" (get-file *b* "file" "test-out-file"))
  (test "Get/Put File 1" #t

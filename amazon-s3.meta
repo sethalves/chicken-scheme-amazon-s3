@@ -9,7 +9,8 @@
 
 (needs base64 sha1 http-client uri-common intarweb srfi-19 hmac ssax sxpath)
 
-(test-depends test)
+;; openssl is necessary for tests because the default endpoints are HTTPS
+(test-depends test openssl)
 
 (author "Thomas Hintz")
 (maintainer "Seth Alves")
